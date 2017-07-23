@@ -1,0 +1,93 @@
+function [MeasPairs,NewSigSet]=SensorTask_GreedyTime_AllInd_prevconditoned(MeasPairs,Satellites,Radars,Constants,Tk,Tk1,method)
+%%
+% - Tk-1 is fully updated time step.
+% - Including Tk and Tk1
+% - Over all time
+% - Greedy over time
+% - All independent at each time, solve binary integer problem
+% - Next time step is conditioned on previous ones
+% - Compute all mutual informations pairs for current time step conditioned
+% on previous time step
+
+
+
+% MeasPairs{1}(i,j)
+%               j=1,rad1  j=2,rad2   j=3,rad3  j=4,rad4   ...
+% i=1 sat1
+% i=2 sat2
+% i=3 sat3
+% .
+% .
+% .
+
+
+%%
+opt = odeset('reltol',1e-12,'abstol',1e-12);
+global kappa
+kappa=1;
+switch lower(method)
+    case 'ut'
+        qd_pts=@(m,P)UT_sigmapoints(m,P,2);
+    case 'cut4'
+        qd_pts=@conjugate_dir_gausspts;
+    case 'cut6'
+        qd_pts=@conjugate_dir_gausspts_till_6moment_scheme2;
+    case 'cut8'
+        qd_pts=@conjugate_dir_gausspts_till_8moment;
+    case 'gh'
+        qd_pts=@(m,P)GH_pts(m,P,para);
+    otherwise
+        error('smthg is wrong: DONT ask me what')
+end
+
+%%
+
+% FIMG=zeros(size(XsigSat,1),Radmodel.Nrad,length(curk:fink));
+MI=zeros(Constants.Nsat,Constants.Nrad);
+MP=MeasPairs;
+
+
+for k=Tk:Tk1
+    MI=zeros(Constants.Nsat,Constants.Nrad);
+    
+    Satellites=Propagate_sattask(Satellites,Constants,k-1,k,'ut');
+    
+    for Ns=1:1:Constants.Nsat
+        for Nr=1:Constants.Nrad
+            MP{k}=zeros(Constants.Nsat,Constants.Nrad);
+            MP{k}(Ns,Nr)=1;
+            ymeas=NaN; % for pseudo update
+            Pk=reshape( Satellites{Ns}.P(k,:),Satellites{Ns}.fn,Satellites{Ns}.fn );
+            SS=MeasUpdate_sattask(MP,Satellites,Radars,Constants,k,ymeas,'ut');
+            Pu=reshape( SS{Ns}.P(k,:),SS{Ns}.fn,SS{Ns}.fn );
+            MI(Ns,Nr)=max(-0.5*log(det(Pu)/det(Pk)) ,0 ) ;
+            
+        end
+    end
+    % Now solve the binary integer program for this time step
+    f=reshape(MI,Constants.Nsat * Constants.Nrad);
+    ONZR=zeros(1,Constants.Nsat * Constants.Nrad);
+    for i=1:Constants.Nsat
+        ONZR(i)=1;
+    end
+    A=ONZR;
+    for i=1:Constants.Nrad-1
+        ONZR=
+        A=vertcat(A,)
+    end
+    
+    b=ones(Constants.Nrad)
+    mmu = bintprog(-f,A,b);
+    
+    MeasPairs{curk}=[];
+    for tt=1:1:prod(size(MI))
+        if mmu(tt)==1
+            MeasPairs{curk}=vertcat(MeasPairs{curk},F(tt,:));
+        end
+    end
+    
+end
+
+
+
+end

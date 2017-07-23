@@ -81,7 +81,7 @@ for i=1:1:Constants.Nrad
     %     Radars{i}.PolarPositions=[];
     %     Radars{i}.R =[];
     Radars{i}.hn=nsens_out;
-    Radars{i}.penalty=100;
+    Radars{i}.penalty=1000;
     Radars{i}.G=@(x,RadPosPolar,hn,ConeAngle,MaxDepth,pen)radar_sens_penalty(x,RadPosPolar,hn,ConeAngle,MaxDepth,pen);
     Radars{i}.h=@(x,RadPosPolar,hn)radar_sens_cart(x,RadPosPolar,hn);
     
@@ -106,7 +106,7 @@ P0=blkdiag(0.01,0.01,0.01,1e-8,1e-8,1e-8);
 
 for i=1:1:Constants.Nsat
     Satellites{i}.HighlightPlotTraj=0 ;
-    Satellites{i}.Q=zeros(6,6);
+    Satellites{i}.Q=P0/10000;
     Satellites{i}.f=@(t,x)twoBody(t,x);
     Satellites{i}.StateDynamics='continuous';
     Satellites{i}.fn=6;
@@ -187,7 +187,7 @@ end
 
 %% Plot trajectories to verify
 
-plot_sat_radar_system2(Satellites,Radars,Constants,yplottruth)
+% plot_sat_radar_system2(Satellites,Radars,Constants,yplottruth)
 
 
 
@@ -206,19 +206,30 @@ NextSensTaskTimeStep=2;
 
 for k=2:1:Constants.Ntimesteps
     disp(strcat('at time step : ',num2str(k), ' : of : ',num2str(Constants.Ntimesteps)))
-    
+    disp('---------------------------------------------------------------------')
     tic
     % propagate
     Satellites=Propagate_sattask(Satellites,Constants,k-1,k,'ut');
     
     %Generate the MeasPairs
     if k==NextSensTaskTimeStep
-        %         MeasPairs=SensorTask_dummy(MeasPairs,Satellites,Radars,Constants,k,k+Constants.SensTaskHorizon,'ut');
-        NextSensTaskTimeStep=k+Constants.SensTaskHorizon;
+        %dummy
+        %MeasPairs=SensorTask_dummy(MeasPairs,Satellites,Radars,Constants,k,k+Constants.SensTaskHorizon,'ut');
+        
+        %Greedy time, all ind, NO JOINT COV
+        if k+Constants.SensTaskHorizon>=Constants.Ntimesteps
+            MeasPairs=SensorTask_GreedyTime_AllInd_prevconditoned(MeasPairs,Satellites,Radars,Constants,k,Constants.Ntimesteps,'ut');
+            NextSensTaskTimeStep=Constants.Ntimesteps+1;
+        else
+            MeasPairs=SensorTask_GreedyTime_AllInd_prevconditoned(MeasPairs,Satellites,Radars,Constants,k,k+Constants.SensTaskHorizon,'ut');
+            NextSensTaskTimeStep=k+Constants.SensTaskHorizon;
+            
+        end
+        
     end
     
     % Measurement update only for the MeasPairs{k}
-    Satellites=MeasUpdate_sattask(MeasPairs,Satellites,Radars,Constants,k,ymeas,'ut');
+    Satellites=MeasUpdate_sattask(MeasPairs,Satellites,Radars,Constants,k,ymeas,'ut','trueupdate');
     
     toc
     
@@ -234,18 +245,35 @@ end
 figure
 plot(Constants.Tvec,CovMaxTrace)
 
+
+%% Heat map of covariance
+
+
+M=zeros(Constants.Nsat,Constants.Ntimesteps);
+for i=1:Constants.Nsat
+    for j=1:Constants.Ntimesteps
+        M(i,j)=trace( sqrtm( reshape(Satellites{i}.P(j,:),Satellites{i}.fn,Satellites{i}.fn) ) );
+    end
+end
+
+hm = HeatMap(M,'RowLabels',1:1:Constants.Nsat,'ColumnLabels',1:1:Constants.Ntimesteps,'Colormap','REDGREENCMAP','Symmetric',0,'ColumnLabelsRotate',1);
+addXLabel(hm, 'time steps --> ', 'FontSize', 26, 'FontAngle', 'Italic')
+addYLabel(hm, 'Object Id ', 'FontSize', 26, 'FontAngle', 'Italic')
+addTitle(hm, 'Trace of Covariance ', 'FontSize', 26, 'FontAngle', 'Italic')
+
+
 %% Heat map of tasking
 
-figure
+
 M=zeros(Constants.Nsat,Constants.Ntimesteps-1);
 for i=1:Constants.Nsat
     for j=2:Constants.Ntimesteps
-        M(i,j-1)=sum(MeasPairs{j}(i,:) )+j+i;
+        M(i,j-1)=sum(MeasPairs{j}(i,:) );
     end
 end
 
 hm = HeatMap(M,'RowLabels',1:1:Constants.Nsat,'ColumnLabels',2:1:Constants.Ntimesteps,'Colormap','REDGREENCMAP','Symmetric',0,'ColumnLabelsRotate',1);
 addXLabel(hm, 'time steps --> ', 'FontSize', 26, 'FontAngle', 'Italic')
 addYLabel(hm, 'Object Id ', 'FontSize', 26, 'FontAngle', 'Italic')
-
+addTitle(hm, 'Tasking Pairs ', 'FontSize', 26, 'FontAngle', 'Italic')
 

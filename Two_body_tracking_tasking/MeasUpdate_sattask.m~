@@ -1,4 +1,4 @@
-function Satellites=MeasUpdate_sattask(MeasPairs,Satellites,Radars,Constants,Tk,ymeas,method,updatetype)
+function Satellites=MeasUpdate_sattask(MeasPairs,Satellites,Radars,Constants,Tk,ymeas,method)
 
 % MeasPairs{1}(i,j)
 %               j=1,rad1  j=2,rad2   j=3,rad3  j=4,rad4   ...
@@ -34,7 +34,8 @@ parfor Ns=1:Constants.Nsat
     mk=Satellites{Ns}.mu(Tk,:)';
     Pk=reshape(Satellites{Ns}.P(Tk,:),Satellites{Ns}.fn,Satellites{Ns}.fn);
     
-    
+    [x,w]=qd_pts(mk,Pk);
+    N=size(x,1);
     
     RadarIds_forsat=MeasPairs{Tk}(Ns,:);
     RadarIds_forsat=RadarIds(RadarIds_forsat==1);
@@ -42,9 +43,6 @@ parfor Ns=1:Constants.Nsat
     
     
     if isempty(RadarIds_forsat)==0
-        [x,w]=qd_pts(mk,Pk);
-        N=size(x,1);
-    
         %         Srad=MeasPairs{k}(ind,2);
         %         Y=zeros(size(x,1),Radmodel.hn*length(Srad));
         Y=[];
@@ -72,29 +70,18 @@ parfor Ns=1:Constants.Nsat
             %             if flag1==0
             %             Y(msi,(nr-1)*Radmodel.hn+1:(nr*Radmodel.hn))=ZZ(:)';
             
-            if strcmp(updatetype,'pseudoupdate')==1
-                % do pseudo update here
-                
-                Y=horzcat(Y,ZZ);
-                RG=Radars{radid}.R;
-                RR= blkdiag(RR,RG);
-                
-                updateflag1=1;
-
+            if isnan(ymeas)==1
                 
             else
                 if sum(isnan(H))<length(H)/2
                     Y=horzcat(Y,ZZ);
-                    %  Do not apply penalty
-                    %                     RG=0;
-                    %                     for ii=1:1:N
-                    %                         RG=RG+w(ii)*G(ii)^2*Radars{radid}.R;
-                    %                     end
-                    RG=Radars{radid}.R;
+                    RG=0;
+                    for ii=1:1:N
+                        RG=RG+w(ii)*G(ii)^2*Radars{radid}.R;
+                    end
                     RR= blkdiag(RR,RG);
                     ym=vertcat(ym,ymeas{Ns,radid,Tk});
-                    updateflag1=1;
-
+                    
                 end
                 
             end
@@ -103,27 +90,22 @@ parfor Ns=1:Constants.Nsat
         
         
         
-        if updateflag1==1
+        if isempty(ym)==0
             [mz,Pz]=MeanCov(Y,w);
             Pz=Pz+RR;
             Pcc=CrossCov(x,mk,Y,mz,w);
-            if strcmp(updatetype,'pseudoupdate')==1
-                [xu,Pu]=KalmanUpdate(mk,Pk,mz,Pz,Pcc,mz);
-            else
-                [xu,Pu]=KalmanUpdate(mk,Pk,mz,Pz,Pcc,ym);
-            end
-            
+            [xu,Pu]=KalmanUpdate(mk,Pk,mz,Pz,Pcc,ym);
             Satellites{Ns}.mu(Tk,:)=xu;
             Satellites{Ns}.P(Tk,:)=reshape(Pu,1,Satellites{Ns}.fn*Satellites{Ns}.fn);
             
-%             disp(strcat('MeasUpdated for satellite         :',' ',num2str(Ns) ) )
+            disp(strcat('MeasUpdated for satellite         :',' ',num2str(Ns) ) )
         else
-%             disp(strcat('NOOOO Meas for satellite          :',' ',num2str(Ns) ) )
+            disp(strcat('NOOOO Meas for satellite          :',' ',num2str(Ns) ) )
             
             
         end
     else
-%         disp(strcat('NOOOO Radars Tasked for satellite :',' ',num2str(Ns) )  )
+        disp(strcat('NOOOO Radars Tasked for satellite :',' ',num2str(Ns) )  )
     end
     % end
     

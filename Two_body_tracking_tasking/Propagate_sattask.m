@@ -61,7 +61,7 @@ parfor Ns=1:Nsats
     
     MU=repmat(mk1',N,1);
     Z=Z-MU;
-    Pk1=Z'*(W.*Z);
+    Pk1=Z'*(W.*Z)+Satellites{Ns}.Q;
     
     Satellites{Ns}.mu(Tk1,:)=mk1;
     Satellites{Ns}.P(Tk1,:)=reshape(Pk1,1,Satellites{Ns}.fn*Satellites{Ns}.fn);
