@@ -1,7 +1,7 @@
-function h=radar_sens(x,Srad,Radmodel)
+function h=radar_sens(x,RadPosPolar,hn)
 x=x(1:3);
 x=x(:);
-[xenu,~,~]=vec_radar_coordchange(x,Srad,Radmodel.RadPos,'ecef2local');
+[xenu,~,~]=vec_radar_coordchange(x,RadPosPolar,'ecef2local');
 % x=x'-ecef_ref(Srad,:);
 % xenu = ecef2enu(x*1e3,ecef_ref(Srad,:)*1e3)/1000;
 
@@ -14,15 +14,15 @@ phi=atan2(sqrt(xenu(1)^2+xenu(2)^2),xenu(3));
 %     h=NaN;
 %     return;
 % end
-if Radmodel.hn==3
+if hn==3
     h=[r;th;phi];
 %  h=[x(1);x(2);x(3)];
-elseif Radmodel.hn==2
+elseif hn==2
 %     h=[th;phi];
 %   h=[x(1);x(2)];
 %  h=[r;phi];
  h=[r;th];
-elseif Radmodel.hn==1
+elseif hn==1
     h=r;
 end
 

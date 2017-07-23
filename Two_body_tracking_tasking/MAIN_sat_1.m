@@ -8,6 +8,8 @@
 
 %% Simulation options
 close all
+clear all
+clc
 
 redoSATTRAJ=0;
 %% Constants
@@ -55,7 +57,7 @@ end
 
 
 %% radars (lat,long, altitude) in geod+edic
-nsens_out=2;
+nsens_out=3;
 % (th,phi,ConeAngle,MaxRange) --> (perp to equaltor, along equator)
 Ang=[-100*pi/180    0  pi/3 2500
     -80*pi/180    20*pi/180 pi/3 2500
@@ -76,18 +78,22 @@ RadPos=zeros(size(Ang,1),3);
 k=1;
 
 for i=1:1:Constants.Nrad
-    Radars{i}.PolarPositions=[];
-    Radars{i}.R =[];
+    %     Radars{i}.PolarPositions=[];
+    %     Radars{i}.R =[];
     Radars{i}.hn=nsens_out;
-    Radars{i}.G=@(x,Srad)radar_sens_penalty(x,Srad,Radmodel,100);
-    Radars{i}.h=@(x,Srad)radar_sens(x,Srad,Radmodel);
+    Radars{i}.penalty=100;
+    Radars{i}.G=@(x,RadPosPolar,hn,ConeAngle,MaxDepth,pen)radar_sens_penalty(x,RadPosPolar,hn,ConeAngle,MaxDepth,pen);
+    Radars{i}.h=@(x,RadPosPolar,hn)radar_sens_cart(x,RadPosPolar,hn);
     
     %
-    Radars{i}.PolarPositions=vertcat(Radars{i}.PolarPositions,[Ang(i,1),Ang(i,2),Constants.Re]);
+    Radars{i}.PolarPositions=[Ang(i,1),Ang(i,2),Constants.Re];
     Radars{i}.ConeAngle=Ang(i,3);
     Radars{i}.MaxRange=Ang(i,4);
     
-    Radars{i}.R=vertcat(Radars{i}.R, reshape(R,1,Radars{i}.hn^2) );
+    %     R=blkdiag((0.2*pi/180)^2,(0.2*pi/180)^2);
+    R=blkdiag( (0.1)^2, (0.1)^2, (0.1)^2 );
+    %     Radars{i}.R=vertcat(Radars{i}.R, reshape(R,1,Radars{i}.hn^2) );
+    Radars{i}.R=R;
 end
 
 
@@ -101,6 +107,10 @@ P0=blkdiag(0.01,0.01,0.01,1e-8,1e-8,1e-8);
 for i=1:1:Constants.Nsat
     Satellites{i}.HighlightPlotTraj=0 ;
     Satellites{i}.Q=zeros(6,6);
+    Satellites{i}.f=@(t,x)twoBody(t,x);
+    Satellites{i}.StateDynamics='continuous';
+    Satellites{i}.fn=6;
+    
 end
 
 if redoSATTRAJ==1
@@ -119,11 +129,11 @@ if redoSATTRAJ==1
         
         [~,xx]=ode45(@twoBody,Tvec,pprr',opt);
         ytruth{i}=xx;
-        Satellites{i}.ytruth=xx;
+        %         Satellites{i}.ytruth=xx;
         
         [~,xx]=ode45(@twoBody,plotTvec,pprr',opt);
         yplottruth{i}=xx;
-        Satellites{i}.yplottruth=xx;
+        %         Satellites{i}.yplottruth=xx;
         
         %     ytruth_orb{i} = XYZ2OE_multiple(ytruth{i});
         i
@@ -137,10 +147,10 @@ else
     ytruth=M.ytruth;
     yplottruth=M.yplottruth;
     
-    for i=1:Constants.Nsat
-        Satellites{i}.ytruth=ytruth{i};
-        Satellites{i}.yplottruth=yplottruth{i};
-    end
+    %     for i=1:Constants.Nsat
+    %         Satellites{i}.ytruth=ytruth{i};
+    %         Satellites{i}.yplottruth=yplottruth{i};
+    %     end
     
 end
 
@@ -150,18 +160,52 @@ end
 disp('print done sat prop')
 
 
+%% checking if all the orbits are observable
+% Satobserve=zeros(Nsat,1);
+% for nsat=1:1:Nsat
+%     for nrad=1:1:Nrad
+%         for tt=1:1:length(Tvec)
+%             yy=Radmodel.h(ytruth{nsat}(tt,:),nrad);
+%             if isnan(yy(1))==0
+%                 Satobserve(nsat)=Satobserve(nsat)+1;
+%             end
+%         end
+%     end
+% end
+% Satobserve
 
+%% Generating measurements
+
+ymeas=cell(Constants.Nsat,Constants.Nrad,Constants.Ntimesteps);
+for i=1:Constants.Nsat
+    for j=1:1:Constants.Nrad
+        for k=1:1:Constants.Ntimesteps
+            ymeas{i,j,k}=Radars{j}.h( ytruth{i,1}(k,:), Radars{j}.PolarPositions,Radars{j}.hn )+sqrtm(Radars{j}.R )*randn(Radars{j}.hn,1);
+        end
+    end
+end
 
 %% Plot trajectories to verify
 
-plot_sat_radar_system2(Satellites,Radars,Constants)
+plot_sat_radar_system2(Satellites,Radars,Constants,yplottruth)
 
+
+
+%% Set filter initial conditions
+
+for i=1:1:Constants.Nsat
+    Satellites{i}.mu=zeros(Constants.Ntimesteps, Satellites{i}.fn) ;
+    Satellites{i}.P=zeros(Constants.Ntimesteps, Satellites{i}.fn * Satellites{i}.fn );
+    
+    Satellites{i}.mu(1,:)=Xsat0(i,:);
+    Satellites{i}.P(1,:)=reshape(P0,1, Satellites{i}.fn * Satellites{i}.fn);
+end
 
 %% Running Simmulation
 NextSensTaskTimeStep=2;
 
-for k=2:1:nt
-    disp(strcat('at time step : ',num2str(k)))
+for k=2:1:Constants.Ntimesteps
+    disp(strcat('at time step : ',num2str(k), ' : of : ',num2str(Constants.Ntimesteps)))
     
     tic
     % propagate
@@ -169,15 +213,39 @@ for k=2:1:nt
     
     %Generate the MeasPairs
     if k==NextSensTaskTimeStep
-        MeasPairs=SensorTask_FIM(MeasPairs,Satellites,Radars,Constants,k,k+Constants.SensTaskHorizon,'ut');
+        %         MeasPairs=SensorTask_dummy(MeasPairs,Satellites,Radars,Constants,k,k+Constants.SensTaskHorizon,'ut');
         NextSensTaskTimeStep=k+Constants.SensTaskHorizon;
     end
     
     % Measurement update only for the MeasPairs{k}
-    Satellites=MeasUpdate_sattask(MeasPairs,Satellites,Radars,Constants,k,'ut');
+    Satellites=MeasUpdate_sattask(MeasPairs,Satellites,Radars,Constants,k,ymeas,'ut');
     
     toc
     
     
     pause(0.05)
 end
+
+[CovMaxTrace]=GetSatMetric(Satellites,Constants);
+
+
+%%
+
+figure
+plot(Constants.Tvec,CovMaxTrace)
+
+%% Heat map of tasking
+
+figure
+M=zeros(Constants.Nsat,Constants.Ntimesteps-1);
+for i=1:Constants.Nsat
+    for j=2:Constants.Ntimesteps
+        M(i,j-1)=sum(MeasPairs{j}(i,:) )+j+i;
+    end
+end
+
+hm = HeatMap(M,'RowLabels',1:1:Constants.Nsat,'ColumnLabels',2:1:Constants.Ntimesteps,'Colormap','REDGREENCMAP','Symmetric',0,'ColumnLabelsRotate',1);
+addXLabel(hm, 'time steps --> ', 'FontSize', 26, 'FontAngle', 'Italic')
+addYLabel(hm, 'Object Id ', 'FontSize', 26, 'FontAngle', 'Italic')
+
+

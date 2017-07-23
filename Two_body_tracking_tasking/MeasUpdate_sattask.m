@@ -1,72 +1,64 @@
-function [XsigSat,NewSigSet]=MeasUpdate_sattask(XsigSat,MeasPairs,SigSet,Radmodel,k,Tvec,ymeas,method,ytruth)
+function Satellites=MeasUpdate_sattask(MeasPairs,Satellites,Radars,Constants,Tk,ymeas,method)
+
+% MeasPairs{1}(i,j)
+%               j=1,rad1  j=2,rad2   j=3,rad3  j=4,rad4   ...
+% i=1 sat1
+% i=2 sat2
+% i=3 sat3
+% .
+% .
+% .
 
 
 global kappa
-    kappa=1;
-    switch lower(method)
-   case 'ut'
-      qd_pts=@(m,P)UT_sigmapoints(m,P,2);
-   case 'cut4'
-      qd_pts=@conjugate_dir_gausspts;
-   case 'cut6'
-      qd_pts=@conjugate_dir_gausspts_till_6moment_scheme2;
-   case 'cut8'
-      qd_pts=@conjugate_dir_gausspts_till_8moment;
-   case 'gh'
-      qd_pts=@(m,P)GH_pts(m,P,para);
-   otherwise
-      error('smthg is wrong: DONT ask me what')
-    end
-    
-    XS1=cell(size(XsigSat,1),1);
-    XS2=cell(size(XsigSat,1),1);
-    XS3=cell(size(XsigSat,1),1);
-    
-for i=1:1:size(XsigSat,1)
-    XS1{i}=XsigSat{i,1};
-    XS2{i}=XsigSat{i,2};
-    XS3{i}=XsigSat{i,3};
+kappa=1;
+switch lower(method)
+    case 'ut'
+        qd_pts=@(m,P)UT_sigmapoints(m,P,2);
+    case 'cut4'
+        qd_pts=@conjugate_dir_gausspts;
+    case 'cut6'
+        qd_pts=@conjugate_dir_gausspts_till_6moment_scheme2;
+    case 'cut8'
+        qd_pts=@conjugate_dir_gausspts_till_8moment;
+    case 'gh'
+        qd_pts=@(m,P)GH_pts(m,P,para);
+    otherwise
+        error('smthg is wrong: DONT ask me what')
 end
-Nsatt=size(XsigSat,1);
 
-NewSigSet=cell(size(SigSet,1),3);
-NewSigSetpts=cell(size(SigSet,1),1);
-NewSigSetwts=cell(size(SigSet,1),1);
+RadarIds=1:1:Constants.Nrad;
 
-for Ns=1:1:Nsatt
-
-    x=SigSet{Ns,1};
-    w=SigSet{Ns,2};
-
-[N,n]=size(x);
-tT=Tvec([SigSet{Ns,3}:k]);
-if k>SigSet{Ns,3}
-x=propagate_sigma_pts_2body(x,tT);
-end
-      
-  [mk,Pk]=MeanCov(x,w);
-
-    if sum(size(MeasPairs{k}))==0
-        ind=[];
-    else
-    ind=find(MeasPairs{k}(:,1)==Ns);
-    end
+parfor Ns=1:Constants.Nsat
     
-    if isempty(ind)==0
-        Srad=MeasPairs{k}(ind,2);
-%         Y=zeros(size(x,1),Radmodel.hn*length(Srad));
+    mk=Satellites{Ns}.mu(Tk,:)';
+    Pk=reshape(Satellites{Ns}.P(Tk,:),Satellites{Ns}.fn,Satellites{Ns}.fn);
+    
+    [x,w]=qd_pts(mk,Pk);
+    N=size(x,1);
+    
+    RadarIds_forsat=MeasPairs{Tk}(Ns,:);
+    RadarIds_forsat=RadarIds(RadarIds_forsat==1);
+    
+    
+    
+    if isempty(RadarIds_forsat)==0
+        %         Srad=MeasPairs{k}(ind,2);
+        %         Y=zeros(size(x,1),Radmodel.hn*length(Srad));
         Y=[];
         ym=[];
         RR=[];
         GG=[];
-        for nr=1:1:length(Srad)
+        for nr=1:1:length(RadarIds_forsat)
             flag1=0;
-            ZZ=zeros(N,Radmodel.hn);
+            radid=RadarIds_forsat(nr);
+            
+            ZZ=zeros(N,Radars{radid}.hn);
             G=zeros(N,1);
             H=zeros(N,1);
             for msi=1:1:N
-                ZZ(msi,:)=Radmodel.h(x(msi,:)',Srad(nr));
-                [gg,hh]=Radmodel.G(x(msi,:)',Srad(nr));
+                ZZ(msi,:)=Radars{radid}.h( x(msi,:)' , Radars{radid}.PolarPositions, Radars{radid}.hn );
+                [gg,hh]=Radars{radid}.G( x(msi,:)', Radars{radid}.PolarPositions, Radars{radid}.hn, Radars{radid}.ConeAngle,Radars{radid}.MaxRange,Radars{radid}.penalty);
                 G(msi)=gg;
                 H(msi)=hh;
                 %                 if isnan(ZZ(msi,1))==1
@@ -80,56 +72,34 @@ end
                 Y=horzcat(Y,ZZ);
                 RG=0;
                 for ii=1:1:N
-                    RG=RG+w(ii)*G(ii)^2*Radmodel.R(Srad(nr));
+                    RG=RG+w(ii)*G(ii)^2*Radars{radid}.R;
                 end
                 RR= blkdiag(RR,RG);
-                ym=vertcat(ym,ymeas{Ns,Srad(nr),k});
+                ym=vertcat(ym,ymeas{Ns,radid,Tk});
                 
             end
         end
-
         
         
-
+        
+        
         if isempty(ym)==0
-        [mz,Pz]=MeanCov(Y,w);    
-        Pz=Pz+RR;    
-        Pcc=CrossCov(x,mk,Y,mz,w);
-        [xu,Pu]=KalmanUpdate(mk,Pk,mz,Pz,Pcc,ym);
-        XS1{Ns}(k,:)=xu(:)';
-        XS2{Ns}(k,:)=reshape(Pu,1,length(xu)^2);
-        XS3{Ns}(k)=1;
-        
-        [x,w]=qd_pts(xu,Pu);
-        
-        NewSigSetpts{Ns,1}=x;
-        NewSigSetwts{Ns,1}=w;
-        disp('Meas Updated')
+            [mz,Pz]=MeanCov(Y,w);
+            Pz=Pz+RR;
+            Pcc=CrossCov(x,mk,Y,mz,w);
+            [xu,Pu]=KalmanUpdate(mk,Pk,mz,Pz,Pcc,ym);
+            Satellites{Ns}.mu(Tk,:)=xu;
+            Satellites{Ns}.P(Tk,:)=reshape(Pu,1,Satellites{Ns}.fn*Satellites{Ns}.fn);
+            
+%             disp('Meas Updated')
         else
             disp('NOOOO Meas Avoided')
-        XS1{Ns}(k,:)=mk(:)';
-        XS2{Ns}(k,:)=reshape(Pk,1,length(mk)^2);
-        NewSigSetpts{Ns,1}=x;
-        NewSigSetwts{Ns,1}=w;
+
+            
         end
     else
-        XS1{Ns}(k,:)=mk(:)';
-        XS2{Ns}(k,:)=reshape(Pk,1,length(mk)^2);
-        NewSigSetpts{Ns,1}=x;
-        NewSigSetwts{Ns,1}=w;
+        disp( strcat('NOOOO Radars Tasked for satellite :',' ',num2str(Ns) )  )
     end
-% end
-
-end
-for i=1:1:size(XsigSat,1)
-  NewSigSet{i,1}=  NewSigSetpts{i};
-  NewSigSet{i,2}=  NewSigSetwts{i};
-  NewSigSet{i,3}=  k;
-  
-end
-
-for i=1:1:size(XsigSat,1)
-    XsigSat{i,1}=XS1{i};
-    XsigSat{i,2}=XS2{i};
-    XsigSat{i,3}=XS3{i};
+    % end
+    
 end
