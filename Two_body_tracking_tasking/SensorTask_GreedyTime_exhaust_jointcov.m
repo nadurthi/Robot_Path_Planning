@@ -63,7 +63,7 @@ for k=Tk:TkF
    MP{k}=-1*ones(Constants.Nsat,Constants.Nrad); 
 end
 
-keyboard
+
 
 %% First get all the satellite sigma points for all time steps
 parfor i=1:1:Constants.Nsat
@@ -159,7 +159,7 @@ for i=1:1:Constants.Nsat
     end
 end
 
-keyboard
+% keyboard
 
 %% Greedy  in targets
 % TraceCov=zeros(1,Constants.Nsat);
@@ -229,20 +229,33 @@ for j=1:Constants.Nrad
             MMP{k}( MP{k}(:,j)==0,j )=0;
             
             % compute the MI for MMP
-            keyboard
+%             keyboard
             MI(i)=ComputeJointMI(Satellites,Radars,Constants,MMP,Psig,Zsig,Tk,TkF,Wsig);
-            
-            
+
         end
+        
         [Y,ind]=max(MI);
-        if Y==0
+        
+%         [j,k]
+%         [Y,ind]
+%         MI
+%         disp('-++++++++++---')
+
+        if Y==0 || isnan(Y)
             MeasPairs{k}(:,j)=0;
         else
             MeasPairs{k}(:,j)=0;
-            MeasPairs{k}(ind,j)=1;
+            if MP{k}(ind,j)==0
+                MeasPairs{k}(ind,j)=0;
+            else
+                MeasPairs{k}(ind,j)=1;
+            end
         end
         
+        
     end  
+    
 end
+% keyboard
 
 end

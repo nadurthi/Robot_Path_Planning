@@ -229,11 +229,14 @@ for k=2:1:Constants.Ntimesteps
     
     toc
     
+    [CovMaxTrace]=GetSatMetric(Satellites,Constants,k);
+    figure(2)
+    plot(Constants.Tvec(1:k),CovMaxTrace)
     
-    pause(0.05)
+    pause(0.5)
 end
 
-[CovMaxTrace]=GetSatMetric(Satellites,Constants);
+[CovMaxTrace]=GetSatMetric(Satellites,Constants,Constants.Ntimesteps);
 
 
 %%
