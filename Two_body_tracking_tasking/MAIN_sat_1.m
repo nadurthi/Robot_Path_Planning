@@ -43,7 +43,7 @@ Satellites=cell(Nsat,1);
 
 MeasPairs=cell(Constants.Ntimesteps ,1);
 for i=1:1:Constants.Ntimesteps
-    MeasPairs{i}=zeros(Constants.Nsat,Constants.Nrad);
+    MeasPairs{i}=-1*ones(Constants.Nsat,Constants.Nrad);
 end
 % MeasPairs{1}(i,j)
 %               j=1,rad1  j=2,rad2   j=3,rad3  j=4,rad4   ...
@@ -215,16 +215,12 @@ for k=2:1:Constants.Ntimesteps
     if k==NextSensTaskTimeStep
         %dummy
         %MeasPairs=SensorTask_dummy(MeasPairs,Satellites,Radars,Constants,k,k+Constants.SensTaskHorizon,'ut');
-        
+
         %Greedy time, all ind, NO JOINT COV
-        if k+Constants.SensTaskHorizon>=Constants.Ntimesteps
-            MeasPairs=SensorTask_GreedyTime_AllInd_prevconditoned(MeasPairs,Satellites,Radars,Constants,k,Constants.Ntimesteps,'ut');
-            NextSensTaskTimeStep=Constants.Ntimesteps+1;
-        else
-            MeasPairs=SensorTask_GreedyTime_AllInd_prevconditoned(MeasPairs,Satellites,Radars,Constants,k,k+Constants.SensTaskHorizon,'ut');
-            NextSensTaskTimeStep=k+Constants.SensTaskHorizon;
-            
-        end
+        
+%         MeasPairs=SensorTask_GreedyTime_AllInd_prevconditoned(MeasPairs,Satellites,Radars,Constants,k,min([k+Constants.SensTaskHorizon,Constants.Ntimesteps]),'ut');
+        MeasPairs=SensorTask_GreedyTime_exhaust_jointcov(MeasPairs,Satellites,Radars,Constants,k,min([k+Constants.SensTaskHorizon,Constants.Ntimesteps]),'ut');
+        NextSensTaskTimeStep=min([k+Constants.SensTaskHorizon,Constants.Ntimesteps]);
         
     end
     
@@ -272,8 +268,25 @@ for i=1:Constants.Nsat
     end
 end
 
-hm = HeatMap(M,'RowLabels',1:1:Constants.Nsat,'ColumnLabels',2:1:Constants.Ntimesteps,'Colormap','REDGREENCMAP','Symmetric',0,'ColumnLabelsRotate',1);
+hm = HeatMap(M,'RowLabels',1:1:Constants.Nsat,'ColumnLabels',2:1:Constants.Ntimesteps,'Colormap',redgreencmap(64, 'Interpolation', 'linear'),'Symmetric',0,'ColumnLabelsRotate',1);
 addXLabel(hm, 'time steps --> ', 'FontSize', 26, 'FontAngle', 'Italic')
 addYLabel(hm, 'Object Id ', 'FontSize', 26, 'FontAngle', 'Italic')
 addTitle(hm, 'Tasking Pairs ', 'FontSize', 26, 'FontAngle', 'Italic')
+% colorbar('southoutside')
+
+%% Heat map of tasking 2
+
+
+M=zeros(Constants.Nrad,Constants.Ntimesteps-1);
+for i=1:Constants.Nrad
+    for j=2:Constants.Ntimesteps
+        M(i,j-1)=sum(MeasPairs{j}(:,i) );
+    end
+end
+
+hm = HeatMap(M,'RowLabels',1:1:Constants.Nrad,'ColumnLabels',2:1:Constants.Ntimesteps,'Colormap',redgreencmap(64, 'Interpolation', 'linear'),'Symmetric',0,'ColumnLabelsRotate',1);
+addXLabel(hm, 'time steps --> ', 'FontSize', 26, 'FontAngle', 'Italic')
+addYLabel(hm, 'Sensor Id ', 'FontSize', 26, 'FontAngle', 'Italic')
+addTitle(hm, 'Tasking Pairs ', 'FontSize', 26, 'FontAngle', 'Italic')
+% colorbar('southoutside')
 

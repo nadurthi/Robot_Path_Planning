@@ -1,0 +1,53 @@
+function MI=ComputeJointMI(Satellites,Radars,Constants,MeasPairs,Psig,Zsig,Tk,TkF,Wsig)
+
+
+MI=zeros(1,Constants.Nsat);
+
+
+for i=1:1:Constants.Nsat
+    X=[];
+    pn=0;
+    for k=Tk:TkF
+        [a,b]=size(Psig{pk-Tk+1,i}.X);
+        X=horzcat(X,Psig{pk-Tk+1,i}.X);
+        pn=pn+b;
+    end
+    
+    for k=Tk:TkF
+        for j=1:1:Constants.Nrad
+            if MeasPairs{k}(i,j)==1
+                X=horzcat(X,Zsig{k-Tk+1,j,i}.Z);
+            end
+        end
+        
+    end
+    
+    [mu,Pu]=MeanCov(X,Wsig{i});
+    
+    
+    
+    
+    
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+end

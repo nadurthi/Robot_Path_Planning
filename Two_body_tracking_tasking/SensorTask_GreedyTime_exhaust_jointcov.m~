@@ -1,0 +1,221 @@
+function MeasPairs=SensorTask_GreedyTime_exhaust_jointcov(MeasPairs,Satellites,Radars,Constants,Tk,TkF,method)
+%%
+% - Tk-1 is fully updated time step.
+% - Including Tk and Tk1
+% - Over all time
+% - Greedy over time
+% - All independent at each time, solve binary integer problem
+% - Next time step , use the pseudo updated covariances
+% - Compute all mutual informations pairs for current time step conditioned
+% on previous time step
+
+
+
+% MeasPairs{1}(i,j)
+%               j=1,rad1  j=2,rad2   j=3,rad3  j=4,rad4   ...
+% i=1 sat1
+% i=2 sat2
+% i=3 sat3
+% .
+% .
+% .
+
+
+%%
+opt = odeset('reltol',1e-12,'abstol',1e-12);
+global kappa
+kappa=1;
+switch lower(method)
+    case 'ut'
+        qd_pts=@(m,P)UT_sigmapoints(m,P,2);
+    case 'cut4'
+        qd_pts=@conjugate_dir_gausspts;
+    case 'cut6'
+        qd_pts=@conjugate_dir_gausspts_till_6moment_scheme2;
+    case 'cut8'
+        qd_pts=@conjugate_dir_gausspts_till_8moment;
+    case 'gh'
+        qd_pts=@(m,P)GH_pts(m,P,para);
+    otherwise
+        error('smthg is wrong: DONT ask me what')
+end
+
+%% First get sall the covariances
+ZCov=cell(length(Tk:TkF),length(Tk:TkF),Constants.Nrad,Constants.Nrad,Constants.Nsat);
+TCov=cell(length(Tk:TkF),length(Tk:TkF),Constants.Nrad,Constants.Nsat);
+PCov=cell(length(Tk:TkF),length(Tk:TkF),Constants.Nsat);
+
+Psig=cell(length(Tk:TkF),Constants.Nsat);
+Zsig=cell(length(Tk:TkF),Constants.Nrad,Constants.Nsat);
+
+Satellites_prop=Satellites;
+MP=MeasPairs;
+for k=Tk:TkF
+    
+   MP{k}=-1*ones(Constants.Nsat,Constants.Nrad); 
+end
+%% First get all the satellite sigma points for all time steps
+for i=1:1:Constants.Nsat
+    mk=Satellites{i}.mu(Tk,:)';
+    Pk=reshape( Satellites{i}.P(Tk,:),Satellites{i}.fn,Satellites{i}.fn );
+    
+    F=Satellites{i}.f;
+    for k=Tk:TkF
+        if k==Tk
+            [x,w]=qd_pts(mk,Pk);
+            Psig{1,i}.X=x;
+            Psig{1,i}.W=w;
+        else
+            Psig{k-Tk+1,i}.W=w;
+            Psig{k-Tk+1,i}.X=zeros( length(Psig{1,i}.W),Satellites{i}.fn );
+            
+            for msi=1:1:length(Psig{1,i}.W)
+                [~,xx]=ode45(F ,Constants.Tvec([k-1,k]),Psig{k-Tk}.X(msi,:)',opt);
+                Psig{k-Tk+1,i}.X(msi,:)=xx(end,:);
+            end
+        end
+        
+        % getting meas zig points
+        
+        for j=1:1:Constants.Nrad
+            Zsig{k-Tk+1,j,i}.Z=NaN;
+            ZZ=zeros( length(Psig{1,i}.W), Radars{j}.hn );
+            H=zeros( length(Psig{1,i}.W), 1 );
+            for msi=1:1:length(Psig{1,i}.W)
+                ZZ(msi,:)=Radars{j}.h( Psig{k-Tk+1}.X(msi,:)' , Radars{j}.PolarPositions, Radars{j}.hn );
+                [gg,hh]=Radars{j}.G( Psig{k-Tk+1}.X(msi,:)', Radars{j}.PolarPositions, Radars{j}.hn, Radars{j}.ConeAngle,Radars{j}.MaxRange,Radars{j}.penalty);
+                H(msi)=hh;
+                
+            end
+            Zsig{k-Tk+1,j,i}.Z=ZZ;
+            if sum(isnan(H))>length(H)/2
+                MP{k}(i,j)=0;
+            end
+        end
+        
+        % cross cov of state with previous time state
+        for pk=Tk:k
+            if k==pk
+                %(Xt1,Xt2,sat)
+                PCov{pk-Tk+1,k-Tk+1,i}=CrossCov_bypts(Psig{pk-Tk+1,i}.X,Psig{k-Tk+1,i}.X,Psig{1,i}.W)+Satellites{i}.Q;
+            else
+                PCov{pk-Tk+1,k-Tk+1,i}=CrossCov_bypts(Psig{pk-Tk+1,i}.X,Psig{k-Tk+1,i}.X,Psig{1,i}.W);
+            end
+            %             PCov{k-Tk+1,pk-Tk+1,i}=PCov{pk-Tk+1,k-Tk+1,i}';
+        end
+        
+        % cross cov of meas with previous time state
+        for jk=1:1:Constants.Nrad
+            for pk=Tk:k
+                
+                for jpk=1:1:Constants.Nrad
+                    if pk==k && jpk>jk
+                        continue
+                    end
+                    
+                    if (k==pk) && (jk==jpk)
+                        % (Ytk-1,Ytk,rad1,rad2,sat)
+                        ZCov{pk-Tk+1,k-Tk+1,jpk,jk,i}=CrossCov_bypts(Zsig{pk-Tk+1,jpk,i}.Z,Zsig{k-Tk+1,jk,i}.Z,Psig{1,i}.W)+Radars{jk}.R ;
+                    else
+                        ZCov{pk-Tk+1,k-Tk+1,jpk,jk,i}=CrossCov_bypts(Zsig{pk-Tk+1,jpk,i}.Z,Zsig{k-Tk+1,jk,i}.Z,Psig{1,i}.W);
+                    end
+                    %                     ZCov{k-Tk+1,pk-Tk+1,j1,j2,i}=ZCov{pk-Tk+1,k-Tk+1,j1,j2,i}';
+                end
+            end
+        end
+        
+        % cross cov of state and meas all rad all prev time meas
+        for pk=Tk:k
+            for j=1:1:Constants.Nrad
+                % (Xt,Yt,rad,sat)
+                TCov{pk-Tk+1,k-Tk+1,j,i}=CrossCov_bypts(Psig{pk-Tk+1,i}.X,Zsig{k-Tk+1,j,i}.Z,Psig{1,i}.W);
+                %                 TCov{pk-Tk+1,k-Tk+1,j,i}=
+            end
+        end
+        
+    end
+    
+    
+end
+
+
+
+%% Greedy  in targets
+TraceCov=zeros(1,Constants.Nsat);
+for i=1:Constants.Nsat
+    Pk=reshape( Satellites{i}.P(Tk,:),Satellites{i}.fn,Satellites{i}.fn );
+    TraceCov(i)= trace(Pk);
+end
+[~,IDprioritySat]=sort(TraceCov,2,'descend');
+
+II=1:Constants.Nsat*Constants.Nrad;
+% Ps=[];
+% Ts=[];
+% Zs=[];
+% for i=IDprioritySat
+%     for pk=Tk:TkF
+%         PP=[];
+%
+%         for k=Tk:TkF
+%             if pk<=k
+%                 PP=horzcat(PP,PCov{pk-Tk+1,k-Tk+1,i} );
+%             else
+%                 PP=horzcat(PP,PCov{k-Tk+1,pk-Tk+1,i}' );
+%             end
+%         end
+%         Ps=vertcat(Ps,PP);
+%
+%         ZZ=[];
+%         for jpk=1:Constants.Nrad
+%             for k=Tk:TkF
+%                 for jk=1:Constants.Nrad
+%                     if pk<=k && jpk<=jk
+%                         ZZ=horzcat(ZZ, ZCov{pk-Tk+1,k-Tk+1,jpk,jk,i} );
+%                     else
+%                         ZZ=horzcat(ZZ, ZCov{pk-Tk+1,k-Tk+1,jpk,jk,i}' );
+%                     end
+%                 end
+%             end
+%         end
+%
+%         Zs=vertcat(Zs,ZZ);
+%     end
+%
+%
+% end
+
+%% Method by only taking sigma points
+% Greedy by sensor and Greedy in time
+
+II=eye(Constants.Nsat);
+for j=Constants.Nrad
+%     MPrt=[];
+%     for k=Tk:TkF
+%         MPrt=vertcat(MPrt,MP{k}(:,j));
+%     end
+%     MPrt_vec=MPrt';
+%     Nvar=MPrt_vec(MPrt_vec==-1);
+    
+    MMP=MeasPairs;
+    for k=Tk:TkF
+       MMP{k}=zeros(Constants.Nsat,Constants.Nrad); 
+    end
+
+    for k=Tk:TkF
+        MI=zeros(1,Constants.Nsat);
+        for i=1:Constants.Nsat
+            MMP{k}(:,j)=II(:,i);
+            MMP{k}( MP{k}(:,j)==0,j )=0;
+            
+            % compute the MI for MMP
+            MI=ComputeJointMI(Psig,Zig,)
+            
+            
+        end
+        
+        MeasPairs{k}(:,j)=MMP{k}(:,j);
+        
+    end  
+end
+
+end

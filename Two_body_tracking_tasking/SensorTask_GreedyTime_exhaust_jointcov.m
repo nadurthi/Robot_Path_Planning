@@ -1,4 +1,4 @@
-function MeasPairs=SensorTask_GreedyTime_exhaust_jointcov(MeasPairs,Satellites,Radars,Constants,Tk,Tk1,method)
+function MeasPairs=SensorTask_GreedyTime_exhaust_jointcov(MeasPairs,Satellites,Radars,Constants,Tk,TkF,method)
 %%
 % - Tk-1 is fully updated time step.
 % - Including Tk and Tk1
@@ -40,68 +40,209 @@ switch lower(method)
         error('smthg is wrong: DONT ask me what')
 end
 
-%%
+%% First get sall the covariances
+% ZCov=cell(length(Tk:TkF),length(Tk:TkF),Constants.Nrad,Constants.Nrad,Constants.Nsat);
+% TCov=cell(length(Tk:TkF),length(Tk:TkF),Constants.Nrad,Constants.Nsat);
+% PCov=cell(length(Tk:TkF),length(Tk:TkF),Constants.Nsat);
 
-% FIMG=zeros(size(XsigSat,1),Radmodel.Nrad,length(curk:fink));
-MI=zeros(Constants.Nsat,Constants.Nrad);
+Wsig=cell(1,Constants.Nsat);
+MPnoviz=cell(1,Constants.Nsat);
+Psig=cell(1,Constants.Nsat);
+Zsig=cell(1,Constants.Nsat);
+for i=1:Constants.Nsat
+    Psig{i}=cell(1,length(Tk:TkF));
+    Zsig{i}=cell(length(Tk:TkF),Constants.Nrad);
+    MPnoviz{i}=cell(length(Tk:TkF),Constants.Nrad);
+end
+% Satellites_prop=Satellites;
+
+
 MP=MeasPairs;
+for k=Tk:TkF
+   MeasPairs{k}=-1*ones(Constants.Nsat,Constants.Nrad); 
+   MP{k}=-1*ones(Constants.Nsat,Constants.Nrad); 
+end
 
+keyboard
 
-for k=Tk:Tk1
-    disp(strcat( 'tasking for time step :',num2str(k) ) )
-    MI=zeros(Constants.Nsat,Constants.Nrad);
+%% First get all the satellite sigma points for all time steps
+parfor i=1:1:Constants.Nsat
+    i
+    mk=Satellites{i}.mu(Tk,:)';
+    Pk=reshape( Satellites{i}.P(Tk,:),Satellites{i}.fn,Satellites{i}.fn );
     
-    Satellites=Propagate_sattask(Satellites,Constants,k-1,k,'ut');
-    
-    for Ns=1:1:Constants.Nsat
-        for Nr=1:Constants.Nrad
-            mk=Satellites{Ns}.mu(k,:)';
-            Pk=reshape( Satellites{Ns}.P(k,:),Satellites{Ns}.fn,Satellites{Ns}.fn );
+    F=Satellites{i}.f;
+    for k=Tk:TkF
+        if k==Tk
             [x,w]=qd_pts(mk,Pk);
-            H=zeros(size(x,1),1);
-            for msi=1:1:size(x,1)
-                [gg,hh]=Radars{Nr}.G( x(msi,:)', Radars{Nr}.PolarPositions, Radars{Nr}.hn, Radars{Nr}.ConeAngle,Radars{Nr}.MaxRange,Radars{Nr}.penalty);
-                H(msi)=hh;
-            end
-            if sum(isnan(H))<length(H)/2
-                MP{k}=zeros(Constants.Nsat,Constants.Nrad);
-                MP{k}(Ns,Nr)=1;
-                ymeas=NaN; % for pseudo update
-
-                SS=MeasUpdate_sattask(MP,Satellites,Radars,Constants,k,ymeas,'ut','pseudoupdate');
-                Pu=reshape( SS{Ns}.P(k,:),SS{Ns}.fn,SS{Ns}.fn );
-                MI(Ns,Nr)=max(-0.5*log(det(Pu)/det(Pk)) ,0 ) ;
-            else
-                MI(Ns,Nr)=-1000000000;
+            Psig{i}{1}=x;
+            Wsig{i}=w;
+        else
+            Psig{i}{k-Tk+1}=zeros( length(Wsig{i}),Satellites{i}.fn );
+            
+            for msi=1:1:length(Wsig{i})
+                [~,xx]=ode45(F ,Constants.Tvec([k-1,k]),Psig{i}{k-Tk}(msi,:)',opt);
+                Psig{i}{k-Tk+1}(msi,:)=xx(end,:);
             end
         end
-    end
-    % Now solve the binary integer program for this time step
-    f=reshape(MI,1,Constants.Nsat * Constants.Nrad);
-    ONZR=zeros(Constants.Nsat * Constants.Nrad,1);
-    for i=1:Constants.Nsat
-        ONZR(i)=1;
-    end
-    A=ONZR';
-    for i=1:Constants.Nrad-1
-        ONZR=circshift(ONZR,Constants.Nsat);
-        A=vertcat(A,ONZR');
+        
+        % getting meas zig points
+        
+        for j=1:1:Constants.Nrad
+            Zsig{i}{k-Tk+1,j}=NaN;
+            ZZ=zeros( length(Wsig{i}), Radars{j}.hn );
+            H=zeros( length(Wsig{i}), 1 );
+            for msi=1:1:length(Wsig{i})
+                ZZ(msi,:)=Radars{j}.h( Psig{i}{k-Tk+1}(msi,:)' , Radars{j}.PolarPositions, Radars{j}.hn );
+                [gg,hh]=Radars{j}.G( Psig{i}{k-Tk+1}(msi,:)', Radars{j}.PolarPositions, Radars{j}.hn, Radars{j}.ConeAngle,Radars{j}.MaxRange,Radars{j}.penalty);
+                H(msi)=hh;
+                
+            end
+            Zsig{i}{k-Tk+1,j}=ZZ;
+            if sum(isnan(H))>length(H)/2
+                MPnoviz{i}{k,j}=0;
+            end
+        end
+        
+%         % cross cov of state with previous time state
+%         for pk=Tk:k
+%             if k==pk
+%                 %(Xt1,Xt2,sat)
+%                 PCov{pk-Tk+1,k-Tk+1,i}=CrossCov_bypts(Psig{pk-Tk+1,i}.X,Psig{k-Tk+1,i}.X,Psig{1,i}.W)+Satellites{i}.Q;
+%             else
+%                 PCov{pk-Tk+1,k-Tk+1,i}=CrossCov_bypts(Psig{pk-Tk+1,i}.X,Psig{k-Tk+1,i}.X,Psig{1,i}.W);
+%             end
+%             %             PCov{k-Tk+1,pk-Tk+1,i}=PCov{pk-Tk+1,k-Tk+1,i}';
+%         end
+%         
+%         % cross cov of meas with previous time state
+%         for jk=1:1:Constants.Nrad
+%             for pk=Tk:k
+%                 
+%                 for jpk=1:1:Constants.Nrad
+%                     if pk==k && jpk>jk
+%                         continue
+%                     end
+%                     
+%                     if (k==pk) && (jk==jpk)
+%                         % (Ytk-1,Ytk,rad1,rad2,sat)
+%                         ZCov{pk-Tk+1,k-Tk+1,jpk,jk,i}=CrossCov_bypts(Zsig{pk-Tk+1,jpk,i}.Z,Zsig{k-Tk+1,jk,i}.Z,Psig{1,i}.W)+Radars{jk}.R ;
+%                     else
+%                         ZCov{pk-Tk+1,k-Tk+1,jpk,jk,i}=CrossCov_bypts(Zsig{pk-Tk+1,jpk,i}.Z,Zsig{k-Tk+1,jk,i}.Z,Psig{1,i}.W);
+%                     end
+%                     %                     ZCov{k-Tk+1,pk-Tk+1,j1,j2,i}=ZCov{pk-Tk+1,k-Tk+1,j1,j2,i}';
+%                 end
+%             end
+%         end
+%         
+%         % cross cov of state and meas all rad all prev time meas
+%         for pk=Tk:k
+%             for j=1:1:Constants.Nrad
+%                 % (Xt,Yt,rad,sat)
+%                 TCov{pk-Tk+1,k-Tk+1,j,i}=CrossCov_bypts(Psig{pk-Tk+1,i}.X,Zsig{k-Tk+1,j,i}.Z,Psig{1,i}.W);
+%                 %                 TCov{pk-Tk+1,k-Tk+1,j,i}=
+%             end
+%         end
+        
     end
     
-    b=ones(Constants.Nrad,1);
-    try
-        mmu = bintprog(-f,A,b);
-    catch
-        keyboard
-    end
-    
-    MeasPairs{k}=reshape(mmu,Constants.Nsat,Constants.Nrad);
-    
-    ymeas=NaN;
-    Satellites=MeasUpdate_sattask(MeasPairs,Satellites,Radars,Constants,k,ymeas,'ut','pseudoupdate');
     
 end
 
+for i=1:1:Constants.Nsat
+    for k=Tk:TkF
+        for j=1:1:Constants.Nrad 
+            if isempty(MPnoviz{i}{k,j})==0
+                MP{k}(i,j)=MPnoviz{i}{k,j};
+            end
+        end
+    end
+end
 
+keyboard
+
+%% Greedy  in targets
+% TraceCov=zeros(1,Constants.Nsat);
+% for i=1:Constants.Nsat
+%     Pk=reshape( Satellites{i}.P(Tk,:),Satellites{i}.fn,Satellites{i}.fn );
+%     TraceCov(i)= trace(Pk);
+% end
+% [~,IDprioritySat]=sort(TraceCov,2,'descend');
+
+II=1:Constants.Nsat*Constants.Nrad;
+% Ps=[];
+% Ts=[];
+% Zs=[];
+% for i=IDprioritySat
+%     for pk=Tk:TkF
+%         PP=[];
+%
+%         for k=Tk:TkF
+%             if pk<=k
+%                 PP=horzcat(PP,PCov{pk-Tk+1,k-Tk+1,i} );
+%             else
+%                 PP=horzcat(PP,PCov{k-Tk+1,pk-Tk+1,i}' );
+%             end
+%         end
+%         Ps=vertcat(Ps,PP);
+%
+%         ZZ=[];
+%         for jpk=1:Constants.Nrad
+%             for k=Tk:TkF
+%                 for jk=1:Constants.Nrad
+%                     if pk<=k && jpk<=jk
+%                         ZZ=horzcat(ZZ, ZCov{pk-Tk+1,k-Tk+1,jpk,jk,i} );
+%                     else
+%                         ZZ=horzcat(ZZ, ZCov{pk-Tk+1,k-Tk+1,jpk,jk,i}' );
+%                     end
+%                 end
+%             end
+%         end
+%
+%         Zs=vertcat(Zs,ZZ);
+%     end
+%
+%
+% end
+
+%% Method by only taking sigma points
+% Greedy by sensor and Greedy in time
+
+II=eye(Constants.Nsat);
+for j=1:Constants.Nrad
+%     MPrt=[];
+%     for k=Tk:TkF
+%         MPrt=vertcat(MPrt,MP{k}(:,j));
+%     end
+%     MPrt_vec=MPrt';
+%     Nvar=MPrt_vec(MPrt_vec==-1);
+    
+    
+
+
+    for k=Tk:TkF
+        MMP=MeasPairs;
+        
+        MI=zeros(1,Constants.Nsat);
+        for i=1:Constants.Nsat
+            MMP{k}(:,j)=II(:,i);
+            MMP{k}( MP{k}(:,j)==0,j )=0;
+            
+            % compute the MI for MMP
+            keyboard
+            MI(i)=ComputeJointMI(Satellites,Radars,Constants,MMP,Psig,Zsig,Tk,TkF,Wsig);
+            
+            
+        end
+        [Y,ind]=max(MI);
+        if Y==0
+            MeasPairs{k}(:,j)=0;
+        else
+            MeasPairs{k}(:,j)=0;
+            MeasPairs{k}(ind,j)=1;
+        end
+        
+    end  
+end
 
 end
