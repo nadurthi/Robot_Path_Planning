@@ -11,17 +11,15 @@ close all
 clear all
 clc
 
-<<<<<<< HEAD
+
 redoSATTRAJ=1;
 %% Constants
 
 Nsat=1000;
-=======
 redoSATTRAJ=0;
 %% Constants
 
 Nsat=15;
->>>>>>> 30c240a9f0bda66371f3d696fac22e6427c3e422
 Nrad=11;
 dt=5*60; % in seconds
 Tf=(24)*60*60; % in seconds
@@ -147,15 +145,11 @@ if redoSATTRAJ==1
         % plot3(xx(:,1),xx(:,2),xx(:,3))
         % keyboard
     end
-<<<<<<< HEAD
+
     save('SavedData/SATELLIIETASKING_MAIN_sat_1__INITIALSATtrajs_set2.mat','Xsat0','ytruth','yplottruth','-v7.3')
 else
     M=load('SavedData/SATELLIIETASKING_MAIN_sat_1__INITIALSATtrajs_set2.mat');
-=======
-    save('SavedData/SATELLIIETASKING_MAIN_sat_1__INITIALSATtrajs.mat','Xsat0','ytruth','yplottruth')
-else
-    M=load('SavedData/SATELLIIETASKING_MAIN_sat_1__INITIALSATtrajs.mat');
->>>>>>> 30c240a9f0bda66371f3d696fac22e6427c3e422
+
     Xsat0=M.Xsat0;
     ytruth=M.ytruth;
     yplottruth=M.yplottruth;
@@ -172,7 +166,6 @@ end
 
 disp('print done sat prop')
 
-<<<<<<< HEAD
 %% Plot trajectories to verify
 
 % plot_sat_radar_system2(Satellites,Radars,Constants,yplottruth)
@@ -187,24 +180,8 @@ pause(1)
 %             yy=Radars{j}.h( ytruth{i,1}(k,:), Radars{j}.PolarPositions,Radars{j}.hn )+sqrtm(Radars{j}.R )*randn(Radars{j}.hn,1);
 %             if isnan(yy(1))==0
 %                 Satobserve(i)=Satobserve(i)+1;
-=======
 
-%% checking if all the orbits are observable
-% Satobserve=zeros(Nsat,1);
-% for nsat=1:1:Nsat
-%     for nrad=1:1:Nrad
-%         for tt=1:1:length(Tvec)
-%             yy=Radmodel.h(ytruth{nsat}(tt,:),nrad);
-%             if isnan(yy(1))==0
-%                 Satobserve(nsat)=Satobserve(nsat)+1;
->>>>>>> 30c240a9f0bda66371f3d696fac22e6427c3e422
-%             end
-%         end
-%     end
-% end
-% Satobserve
 
-<<<<<<< HEAD
 % keyboard
 %% Generating measurements
 if redoSATTRAJ==1
@@ -224,24 +201,7 @@ else
     ymeas=M.ymeas;
 end
 disp('done ymeas')
-=======
-%% Generating measurements
 
-ymeas=cell(Constants.Nsat,Constants.Nrad,Constants.Ntimesteps);
-for i=1:Constants.Nsat
-    for j=1:1:Constants.Nrad
-        for k=1:1:Constants.Ntimesteps
-            ymeas{i,j,k}=Radars{j}.h( ytruth{i,1}(k,:), Radars{j}.PolarPositions,Radars{j}.hn )+sqrtm(Radars{j}.R )*randn(Radars{j}.hn,1);
-        end
-    end
-end
-
-%% Plot trajectories to verify
-
-% plot_sat_radar_system2(Satellites,Radars,Constants,yplottruth)
-
-
->>>>>>> 30c240a9f0bda66371f3d696fac22e6427c3e422
 
 %% Set filter initial conditions
 

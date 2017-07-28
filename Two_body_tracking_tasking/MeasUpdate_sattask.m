@@ -92,11 +92,9 @@ parfor Ns=1:Constants.Nsat
                     %                     end
                     RG=Radars{radid}.R;
                     RR= blkdiag(RR,RG);
-<<<<<<< HEAD
+
                     ym=vertcat(ym,ymeas{Ns}{radid,Tk});
-=======
-                    ym=vertcat(ym,ymeas{Ns,radid,Tk});
->>>>>>> 30c240a9f0bda66371f3d696fac22e6427c3e422
+
                     updateflag1=1;
 
                 end
