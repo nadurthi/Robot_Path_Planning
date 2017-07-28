@@ -4,7 +4,11 @@ function SumMI=ComputeJointMI(Satellites,Radars,Constants,MeasPairs,Psig,Zsig,Tk
 MI=zeros(1,Constants.Nsat);
 
 
+<<<<<<< HEAD
 for i=1:Constants.Nsat
+=======
+for i=1:1:Constants.Nsat
+>>>>>>> 30c240a9f0bda66371f3d696fac22e6427c3e422
     X=[];
     pn=0;
     Q=[];

@@ -208,12 +208,16 @@ II=1:Constants.Nsat*Constants.Nrad;
 %% Method by only taking sigma points
 % Greedy by sensor and Greedy in time
 
+<<<<<<< HEAD
 III=eye(Constants.Nsat);
 II=cell(1,Constants.Nsat);
 for i=1:Constants.Nsat
    II{i}=III(:,i); 
 end
 
+=======
+II=eye(Constants.Nsat);
+>>>>>>> 30c240a9f0bda66371f3d696fac22e6427c3e422
 for j=1:Constants.Nrad
 %     MPrt=[];
 %     for k=Tk:TkF
@@ -226,6 +230,7 @@ for j=1:Constants.Nrad
 
 
     for k=Tk:TkF
+<<<<<<< HEAD
         MMP=cell(1,Constants.Nsat);
         for i=1:Constants.Nsat
             MMP{i}=MeasPairs;
@@ -239,6 +244,18 @@ for j=1:Constants.Nrad
             % compute the MI for MMP
 %             keyboard
             MI(i)=ComputeJointMI(Satellites,Radars,Constants,MMP{i},Psig,Zsig,Tk,TkF,Wsig);
+=======
+        MMP=MeasPairs;
+        
+        MI=zeros(1,Constants.Nsat);
+        for i=1:Constants.Nsat
+            MMP{k}(:,j)=II(:,i);
+            MMP{k}( MP{k}(:,j)==0,j )=0;
+            
+            % compute the MI for MMP
+%             keyboard
+            MI(i)=ComputeJointMI(Satellites,Radars,Constants,MMP,Psig,Zsig,Tk,TkF,Wsig);
+>>>>>>> 30c240a9f0bda66371f3d696fac22e6427c3e422
 
         end
         
