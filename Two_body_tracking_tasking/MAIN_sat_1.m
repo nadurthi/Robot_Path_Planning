@@ -11,14 +11,14 @@ close all
 clear all
 clc
 
-redoSATTRAJ=1;
-filename='SavedData/SATELLIIETASKING_MAIN_sat_1__INITIALSATtrajs.mat';
+redoSATTRAJ=0;
+filename='SavedData/SATELLIIETASKING_MAIN_sat_1__INITIALSATtrajs_set1000.mat';
 
 
 
 %% Constants
 
-Nsat=15;
+Nsat=1000;
 Nrad=11;
 dt=5*60; % in seconds
 Tf=(24)*60*60; % in seconds
@@ -305,3 +305,18 @@ addTitle(hm, 'Tasking Pairs ', 'FontSize', 26, 'FontAngle', 'Italic')
 % colorbar('southoutside')
 
 save(filename)
+
+%% Make animation
+
+% parfor k=1:Constants.Ntimesteps
+% figure
+% plot_sat_radar_system2_anime(Satellites,Radars,MeasPairs,Constants,yplottruth,k)
+% % set(gcf,'renderer','opengl')
+% set(gcf,'renderer','painters');
+% view([-14,20])
+% 
+% pause(0.2)
+% saveas(gcf,strcat('Anime/',sprintf('%6.6d', k)),'jpg')
+% pause(0.1)
+% close
+% end

@@ -29,7 +29,7 @@ end
 
 RadarIds=1:1:Constants.Nrad;
 
-parfor Ns=1:Constants.Nsat
+for Ns=1:Constants.Nsat
     
     mk=Satellites{Ns}.mu(Tk,:)';
     Pk=reshape(Satellites{Ns}.P(Tk,:),Satellites{Ns}.fn,Satellites{Ns}.fn);

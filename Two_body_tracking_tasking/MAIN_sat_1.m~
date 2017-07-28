@@ -12,9 +12,13 @@ clear all
 clc
 
 redoSATTRAJ=0;
+filename='SavedData/SATELLIIETASKING_MAIN_sat_1__INITIALSATtrajs.mat';
+
+
+
 %% Constants
 
-Nsat=5000;
+Nsat=15;
 Nrad=11;
 dt=5*60; % in seconds
 Tf=(24)*60*60; % in seconds
@@ -140,9 +144,11 @@ if redoSATTRAJ==1
         % plot3(xx(:,1),xx(:,2),xx(:,3))
         % keyboard
     end
-    save('SavedData/SATELLIIETASKING_MAIN_sat_1__INITIALSATtrajs_set2.mat','Xsat0','ytruth','yplottruth')
+
+    save(filename,'Xsat0','ytruth','yplottruth','-v7.3')
 else
-    M=load('SavedData/SATELLIIETASKING_MAIN_sat_1__INITIALSATtrajs_set2.mat');
+    M=load(filename);
+
     Xsat0=M.Xsat0;
     ytruth=M.ytruth;
     yplottruth=M.yplottruth;
@@ -161,7 +167,7 @@ disp('print done sat prop')
 
 %% Plot trajectories to verify
 
-% plot_sat_radar_system2(Satellites,Radars,Constants,yplottruth)
+plot_sat_radar_system2(Satellites,Radars,Constants,yplottruth)
 
 pause(1)
 %% checking if all the orbits are observable
@@ -173,24 +179,27 @@ pause(1)
 %             yy=Radars{j}.h( ytruth{i,1}(k,:), Radars{j}.PolarPositions,Radars{j}.hn )+sqrtm(Radars{j}.R )*randn(Radars{j}.hn,1);
 %             if isnan(yy(1))==0
 %                 Satobserve(i)=Satobserve(i)+1;
-%             end
-%         end
-%     end
-% end
-% Satobserve
+
 
 % keyboard
 %% Generating measurements
-
-ymeas=cell(1,Constants.Nsat);
-for i=1:Constants.Nsat
-    for j=1:1:Constants.Nrad
-        for k=1:1:Constants.Ntimesteps
-            ymeas{i,j,k}=Radars{j}.h( ytruth{i,1}(k,:), Radars{j}.PolarPositions,Radars{j}.hn )+sqrtm(Radars{j}.R )*randn(Radars{j}.hn,1);
+if redoSATTRAJ==1
+    ymeas=cell(1,Constants.Nsat);
+    parfor i=1:Constants.Nsat
+        ymeas{i}=cell(Constants.Nrad,Constants.Ntimesteps);
+        for j=1:1:Constants.Nrad
+            for k=1:1:Constants.Ntimesteps
+                ymeas{i}{j,k}=Radars{j}.h( ytruth{i,1}(k,:), Radars{j}.PolarPositions,Radars{j}.hn )+sqrtm(Radars{j}.R )*randn(Radars{j}.hn,1);
+            end
         end
     end
-end
+    save(filename,'ymeas','-append','-v7.3')
 
+else
+    M=load(filename);
+    ymeas=M.ymeas;
+end
+disp('done ymeas')
 
 
 %% Set filter initial conditions
@@ -220,8 +229,8 @@ for k=2:1:Constants.Ntimesteps
 
         %Greedy time, all ind, NO JOINT COV
         
-%         MeasPairs=SensorTask_GreedyTime_AllInd_prevconditoned(MeasPairs,Satellites,Radars,Constants,k,min([k+Constants.SensTaskHorizon,Constants.Ntimesteps]),'ut');
-        MeasPairs=SensorTask_GreedyTime_exhaust_jointcov(MeasPairs,Satellites,Radars,Constants,k,min([k+Constants.SensTaskHorizon,Constants.Ntimesteps]),'ut');
+        MeasPairs=SensorTask_GreedyTime_AllInd_prevconditoned(MeasPairs,Satellites,Radars,Constants,k,min([k+Constants.SensTaskHorizon,Constants.Ntimesteps]),'ut');
+%         MeasPairs=SensorTask_GreedyTime_exhaust_jointcov(MeasPairs,Satellites,Radars,Constants,k,min([k+Constants.SensTaskHorizon,Constants.Ntimesteps]),'ut');
         NextSensTaskTimeStep=min([k+Constants.SensTaskHorizon,Constants.Ntimesteps]);
         
     end
@@ -295,3 +304,17 @@ addYLabel(hm, 'Sensor Id ', 'FontSize', 26, 'FontAngle', 'Italic')
 addTitle(hm, 'Tasking Pairs ', 'FontSize', 26, 'FontAngle', 'Italic')
 % colorbar('southoutside')
 
+save(filename)
+
+%% Make animation
+
+for k=1:Constants.Ntimesteps
+figure
+plot_sat_radar_system2_anime(Satellites,Radars,MeasPairs,Constants,yplottruth,k)
+view([-14,20])
+
+pause(0.3)
+saveas(gcf,strcat('Anime/',sprintf('%6.6d', k)),'png')
+pause(0.1)
+close
+end
