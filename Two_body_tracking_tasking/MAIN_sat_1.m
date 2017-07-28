@@ -11,12 +11,11 @@ close all
 clear all
 clc
 
-
 redoSATTRAJ=1;
-%% Constants
+filename='SavedData/SATELLIIETASKING_MAIN_sat_1__INITIALSATtrajs.mat';
 
-Nsat=1000;
-redoSATTRAJ=0;
+
+
 %% Constants
 
 Nsat=15;
@@ -146,9 +145,9 @@ if redoSATTRAJ==1
         % keyboard
     end
 
-    save('SavedData/SATELLIIETASKING_MAIN_sat_1__INITIALSATtrajs_set2.mat','Xsat0','ytruth','yplottruth','-v7.3')
+    save(filename,'Xsat0','ytruth','yplottruth','-v7.3')
 else
-    M=load('SavedData/SATELLIIETASKING_MAIN_sat_1__INITIALSATtrajs_set2.mat');
+    M=load(filename);
 
     Xsat0=M.Xsat0;
     ytruth=M.ytruth;
@@ -168,7 +167,7 @@ disp('print done sat prop')
 
 %% Plot trajectories to verify
 
-% plot_sat_radar_system2(Satellites,Radars,Constants,yplottruth)
+plot_sat_radar_system2(Satellites,Radars,Constants,yplottruth)
 
 pause(1)
 %% checking if all the orbits are observable
@@ -194,10 +193,10 @@ if redoSATTRAJ==1
             end
         end
     end
-    save('SavedData/SATELLIIETASKING_MAIN_sat_1__INITIALSATtrajs_set2.mat','ymeas','-append','-v7.3')
+    save(filename,'ymeas','-append','-v7.3')
 
 else
-    M=load('SavedData/SATELLIIETASKING_MAIN_sat_1__INITIALSATtrajs_set2.mat');
+    M=load(filename);
     ymeas=M.ymeas;
 end
 disp('done ymeas')
@@ -230,8 +229,8 @@ for k=2:1:Constants.Ntimesteps
 
         %Greedy time, all ind, NO JOINT COV
         
-%         MeasPairs=SensorTask_GreedyTime_AllInd_prevconditoned(MeasPairs,Satellites,Radars,Constants,k,min([k+Constants.SensTaskHorizon,Constants.Ntimesteps]),'ut');
-        MeasPairs=SensorTask_GreedyTime_exhaust_jointcov(MeasPairs,Satellites,Radars,Constants,k,min([k+Constants.SensTaskHorizon,Constants.Ntimesteps]),'ut');
+        MeasPairs=SensorTask_GreedyTime_AllInd_prevconditoned(MeasPairs,Satellites,Radars,Constants,k,min([k+Constants.SensTaskHorizon,Constants.Ntimesteps]),'ut');
+%         MeasPairs=SensorTask_GreedyTime_exhaust_jointcov(MeasPairs,Satellites,Radars,Constants,k,min([k+Constants.SensTaskHorizon,Constants.Ntimesteps]),'ut');
         NextSensTaskTimeStep=min([k+Constants.SensTaskHorizon,Constants.Ntimesteps]);
         
     end
@@ -305,3 +304,4 @@ addYLabel(hm, 'Sensor Id ', 'FontSize', 26, 'FontAngle', 'Italic')
 addTitle(hm, 'Tasking Pairs ', 'FontSize', 26, 'FontAngle', 'Italic')
 % colorbar('southoutside')
 
+save(filename)
