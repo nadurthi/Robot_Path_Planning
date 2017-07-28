@@ -166,7 +166,7 @@ end
 disp('print done sat prop')
 
 %% Plot trajectories to verify
-
+figure
 plot_sat_radar_system2(Satellites,Radars,Constants,yplottruth)
 
 pause(1)
