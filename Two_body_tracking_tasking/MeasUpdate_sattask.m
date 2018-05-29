@@ -34,7 +34,9 @@ for Ns=1:Constants.Nsat
     mk=Satellites{Ns}.mu(Tk,:)';
     Pk=reshape(Satellites{Ns}.P(Tk,:),Satellites{Ns}.fn,Satellites{Ns}.fn);
     
-    
+    if any(isreal(mk)==0) | any(isnan(mk)==1) | any(isreal(Pk)==0) | any(isnan(Pk)==1) | any(eig(Pk)<0)
+        keyboard
+    end
     
     RadarIds_forsat=MeasPairs{Tk}(Ns,:);
     RadarIds_forsat=RadarIds(RadarIds_forsat==1);
@@ -42,7 +44,7 @@ for Ns=1:Constants.Nsat
     
     
     if isempty(RadarIds_forsat)==0
-        [x,w]=qd_pts(mk,Pk);
+        [x,w]=qd_pts(mk,Pk+Satellites{Ns}.Qmeas);
         N=size(x,1);
     
         %         Srad=MeasPairs{k}(ind,2);
@@ -113,6 +115,10 @@ for Ns=1:Constants.Nsat
                 [xu,Pu]=KalmanUpdate(mk,Pk,mz,Pz,Pcc,mz);
             else
                 [xu,Pu]=KalmanUpdate(mk,Pk,mz,Pz,Pcc,ym);
+            end
+            xu
+            if any(isreal(xu)==0) | any(isnan(xu)==1) | any(isreal(Pu)==0) | any(isnan(Pu)==1) | any(eig(Pu)<0)
+                keyboard
             end
             
             Satellites{Ns}.mu(Tk,:)=xu;

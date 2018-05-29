@@ -31,11 +31,14 @@ Nsats=Constants.Nsat;
 opt = odeset('reltol',1e-12,'abstol',1e-12);
 
 %%
-parfor Ns=1:Nsats
+for Ns=1:Nsats
     
     mk=Satellites{Ns}.mu(Tk,:)';
     Pk=reshape(Satellites{Ns}.P(Tk,:),Satellites{Ns}.fn,Satellites{Ns}.fn);
     
+    if any(isreal(mk)==0) | any(isnan(mk)==1) | any(isreal(Pk)==0) | any(isnan(Pk)==1) | any(eig(Pk)<0)
+        keyboard
+    end
     
     [x,w]=qd_pts(mk,Pk);
     N=size(x,1);
@@ -62,6 +65,11 @@ parfor Ns=1:Nsats
     MU=repmat(mk1',N,1);
     Z=Z-MU;
     Pk1=Z'*(W.*Z)+Satellites{Ns}.Q;
+    
+    if any(isreal(mk1)==0) | any(isnan(mk1)==1) | any(isreal(Pk1)==0) | any(isnan(Pk1)==1) | any(eig(Pk1)<0)
+        keyboard
+    end
+    
     
     Satellites{Ns}.mu(Tk1,:)=mk1;
     Satellites{Ns}.P(Tk1,:)=reshape(Pk1,1,Satellites{Ns}.fn*Satellites{Ns}.fn);
