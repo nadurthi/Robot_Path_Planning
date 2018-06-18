@@ -1,5 +1,5 @@
-function Satellites=Propagate_sattask(Satellites,Constants,Tk,Tk1,method)
-
+function Targets=Propagate_targets_from_Tk(Targets,time,Tk,method)
+% propagate from Tk to Tk+1
 % Nsats is the index of the satellites to be updated
 % simply do the measurement update for all the satellites at the time step
 % Tk
@@ -24,39 +24,25 @@ switch lower(method)
         error('smthg is wrong: DONT ask me what')
 end
 
-
-Nsats=Constants.Nsat;
-
-
-opt = odeset('reltol',1e-12,'abstol',1e-12);
-
 %%
-parfor Ns=1:Nsats
+for Ntarg=1:Targets.Ntargs
     
-    mk=Satellites{Ns}.mu(Tk,:)';
-    Pk=reshape(Satellites{Ns}.P(Tk,:),Satellites{Ns}.fn,Satellites{Ns}.fn);
+    mk=Targets.xf{Ntarg}(Tk,:)';
+    Pk=reshape(Targets.Pf{Ntarg}(Tk,:),Targets.fn(Ntarg),Targets.fn(Ntarg));
     
     if any(isreal(mk)==0) | any(isnan(mk)==1) | any(isreal(Pk)==0) | any(isnan(Pk)==1) | any(eig(Pk)<0)
         keyboard
     end
     
     [x,w]=qd_pts(mk,Pk);
-    N=size(x,1);
-    
     
     [N,n]=size(x);
-    tT=Constants.Tvec(Tk:Tk1);
-    Y=cell(N,1);
-    F=Satellites{Ns}.f;
-    for i=1:N
-        [~,xx]=ode45(F ,tT,x(i,:)',opt);
-        Y{i}=xx(end,:);
-    end
-    
     Z=zeros(size(x));
-    for j=1:N
-        Z(j,:)=Y{j};
+    F=Targets.f{Ntarg};
+    for i=1:N
+        Z(i,:)=F(time.dt,x(i,:)');
     end
+
     
     W=repmat(w,1,n);
     mk1=sum(W.*Z,1)';
@@ -64,15 +50,15 @@ parfor Ns=1:Nsats
     
     MU=repmat(mk1',N,1);
     Z=Z-MU;
-    Pk1=Z'*(W.*Z)+Satellites{Ns}.Q;
+    Pk1=Z'*(W.*Z)+Targets.Q{Ntarg};
     
     if any(isreal(mk1)==0) | any(isnan(mk1)==1) | any(isreal(Pk1)==0) | any(isnan(Pk1)==1) | any(eig(Pk1)<0)
         keyboard
     end
     
     
-    Satellites{Ns}.mu(Tk1,:)=mk1;
-    Satellites{Ns}.P(Tk1,:)=reshape(Pk1,1,Satellites{Ns}.fn*Satellites{Ns}.fn);
+    Targets.xf{Ntarg}(Tk+1,:)=mk1;
+    Targets.Pf{Ntarg}(Tk+1,:)=reshape(Pk1,1,Targets.fn(Ntarg)^2);
     
     
     

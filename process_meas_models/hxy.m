@@ -17,12 +17,12 @@ end
 if diff<-pi
     diff=diff+2*pi;
 end
-   y=[xtarg(1)-xsenspos(1);xtarg(2)-xsenspos(2)];
-   tp=[0;1];% 0 =='r' , 1 == 'th'
+y=[xtarg(1)-xsenspos(1);xtarg(2)-xsenspos(2)];
+tp=[0;1];% 0 =='r' , 1 == 'th'
 if r>Rmax || abs(diff)>alpha
-G=-1;
+    G=-1;
 else
-G=1; 
+    G=1;
 end
 
 

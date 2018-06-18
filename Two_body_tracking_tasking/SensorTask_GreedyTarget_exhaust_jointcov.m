@@ -1,4 +1,4 @@
-function MeasPairs=SensorTask_GreedyTime_exhaust_jointcov(MeasPairs,Satellites,Radars,Constants,Tk,TkF,method)
+function MeasPairs=SensorTask_GreedyTarget_exhaust_jointcov(MeasPairs,Satellites,Radars,Constants,Tk,TkF,method)
 %%
 % - get the tasking for Tk:TkF
 % - Tk-1 is fully updated time step.
@@ -67,7 +67,7 @@ end
 
 %% First get all the satellite sigma points for all time steps
 
-
+MaxEigSat=zeros(1,Constants.Nsat);
 parfor i=1:1:Constants.Nsat
     i
     mk=Satellites{i}.mu(Tk,:)';
@@ -79,6 +79,7 @@ parfor i=1:1:Constants.Nsat
             [x,w]=qd_pts(mk,Pk);
             Psig{i}{1}=x;
             Wsig{i}=w;
+            
         else
             Psig{i}{k}=zeros( length(Wsig{i}),Satellites{i}.fn );
             
@@ -87,6 +88,8 @@ parfor i=1:1:Constants.Nsat
                 Psig{i}{k}(msi,:)=xx(end,:);
             end
         end
+        [~,myP]=MeanCov(Psig{i}{k},Wsig{i});
+        MaxEigSat(i) = max(MaxEigSat(i) ,max(eig(myP)) );
         
         % getting meas zig points
         try
@@ -137,10 +140,12 @@ end
 
 % Nttask=length(Tk:TkF);
 % Tvectask
-
+[a,b]=sort(MaxEigSat,'descend');
+priority_satindex = 1:Constants.Nsat;
+priority_satindex=priority_satindex(b);
 % greedy by sensor
 % for each sensor do over all time stesp and all targets
-for k=1:Nttask %nrad=1:Constants.Nrad
+for nsat=priority_satindex %nrad=1:Constants.Nrad
 %     for k=1:Nttask %Tk:TkF
         
         % generate all the possibilities
@@ -152,30 +157,39 @@ for k=1:Nttask %nrad=1:Constants.Nrad
 %         MI=zeros(1,(Constants.Nsat)^Nttask);
         MImax=0;
         SenstaskMImax=[];
-        A=zeros(1,Constants.Nrad);
+        A=zeros(1,Constants.Nrad*Nttask);
         cnt=1;
         while(1)
             cnt=cnt+1;
             MMP=MeasPairs;
             
             % if flg ==1 then it is the end
-            [A,flg] = Increment_index(A,Constants.Nsat);
+%             [A,flg] = Increment_index(A,Constants.Nsat);
+            [A,flg] = Increment_binary_index(A);
+            
+%             A
             skipit=false;
-            
-            for nrad=1:Constants.Nrad
-               if A(nrad)>0 && MP{Tvectask(k)}(A(nrad),nrad)==0
-                   skipit=true;
-                   break 
-               end
-            
-               if A(nrad)==0 
-                   MMP{Tvectask(k)}(:,nrad)=0;
-               else
-                   MMP{Tvectask(k)}(:,nrad)=0;
-                   MMP{Tvectask(k)}(A(nrad),nrad)=1; % take care of no visibility
-               end
-               
+            s=0;
+            for k=1:Nttask
+                for nrad=1:Constants.Nrad
+                   if A((k-1)*Constants.Nrad+nrad)==1 && MP{Tvectask(k)}(nsat,nrad)==0
+                       skipit=true;
+                       break 
+                   end
+                   MMP{Tvectask(k)}(nsat,nrad)=A((k-1)*Constants.Nrad+nrad);
+                end
+                
+                if skipit==true
+                    break
+                end
+                s=s+sum(MMP{Tvectask(k)}(nsat,:)==1);    
+                
+                if any(sum(MMP{Tvectask(k)}==1,1)>1)
+                    skipit=true;
+                    break
+                end
             end
+            
             
             if skipit==true
                 if flg==1
@@ -183,6 +197,13 @@ for k=1:Nttask %nrad=1:Constants.Nrad
                 end
                 continue
             end
+            
+            % constraints for max number of measurements over time for a
+            % satellite
+            if s>=2
+                continue
+            end
+            
             
             % MMP actually has the correct time steps
             % Psig and Zsig indexed from 1 for time
@@ -196,18 +217,18 @@ for k=1:Nttask %nrad=1:Constants.Nrad
                 break
             end
         end
-        
-        for nrad=1:Constants.Nrad
-            MeasPairs{Tvectask(k)}(:,nrad)=0;
-            if isempty(SenstaskMImax)==0
-                MeasPairs{Tvectask(k)}(:,nrad) = SenstaskMImax{Tvectask(k)}(:,nrad);
+        for k=1:Nttask
+            for nrad=1:Constants.Nrad
+                MeasPairs{Tvectask(k)}(nsat,:)=0;
+                if isempty(SenstaskMImax)==0
+                    MeasPairs{Tvectask(k)}(nsat,:) = SenstaskMImax{Tvectask(k)}(nsat,:);
+                end
             end
         end
-
         
         
 %     end  
-    
+%     keyboard
 end
 % keyboard
 

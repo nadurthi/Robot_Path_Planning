@@ -8,20 +8,17 @@
 
 %% Simulation options
 close all
-clear all
+clear
 clc
-
 ss=datestr(now());
 redoSATTRAJ=1;
-filename=['SavedData/SATELLIIETASKING_GreedyTime_15sats2rad',ss,'.mat'];
-
-% filename ='SavedData/SATELLIIETASKING_GreedyTarget_20lookahead_15sats2rad29-May-2018 17:00:58.mat'
+filename=['SavedData/SATELLIIETASKING_MAIN_sat_greedytarget_100sats2rad',ss,'.mat'];
 
 
 %% Constants
 
-Nsat=15;
-Nrad=2;
+Nsat=100;
+Nrad=3;
 dt=5*60; % in seconds
 Tf=(24)*60*60; % in seconds
 Tvec=0:dt:Tf;
@@ -43,8 +40,8 @@ Constants.Ntimesteps=Ntimesteps;
 Constants.Re=Re;
 Constants.SensTaskHorizon=SensTaskHorizon;
 
-Radars=cell(Nrad,1);
-Satellites=cell(Nsat,1);
+
+
 
 
 MeasPairs=cell(Constants.Ntimesteps ,1);
@@ -64,6 +61,7 @@ end
 % figure
 % hold on
 P0=blkdiag(0.01,0.01,0.01,1e-8,1e-8,1e-8);
+Satellites=cell(Nsat,1);
 
 for i=1:1:Constants.Nsat
     Satellites{i}.HighlightPlotTraj=0 ;
@@ -122,16 +120,17 @@ end
 
 disp('print done sat prop')
 
-
 %% radars (lat,long, altitude) in geod+edic
 close all
+
+Radars=cell(Nrad,1);
 nsens_out=3;
 % (th,phi,ConeAngle,MaxRange) --> (perp to equaltor, along equator)
 Ang=[100*pi/180    0  pi/3 4500
-    60*pi/180    70*pi/180 pi/3 3500
-    -80*pi/180    -20*pi/180 pi/3 2500
+    60*pi/180    75*pi/180 pi/3 3500
+    50*pi/180    180*pi/180 2*pi/3 3500
     
-    115*pi/180    90*pi/180 pi/3 2500
+    70*pi/180    70*pi/180 pi/3 2500
     110*pi/180    0*pi/180 pi/3 2500
     80*pi/180    0*pi/180 pi/3 2500
     75*pi/180    90*pi/180 pi/3 2500
@@ -168,29 +167,31 @@ end
 % plot_radar_system2(Radars,Constants,yplottruth)
 % plot_sat_radar_system2(Satellites,Radars,Constants,yplottruth)
 
+figure
+plot_sat_radar_system2(Satellites,Radars,Constants,yplottruth)
 
 %% Plot trajectories to verify
 figure
 plot_sat_radar_system2(Satellites,Radars,Constants,yplottruth)
-plot_prop_paper33
+
 pause(1)
 %% checking if all the orbits are observable
-Satobserve=zeros(Constants.Nsat,1);
-parfor i=1:Constants.Nsat
+Satobserve=zeros(Constants.Nsat,Constants.Nrad);
+for i=1:Constants.Nsat
     i
     for j=1:1:Constants.Nrad
         for k=1:1:length(Constants.Tvec)
 %             yy=Radars{j}.h( ytruth{i,1}(k,:), Radars{j}.PolarPositions,Radars{j}.hn )+sqrtm(Radars{j}.R )*randn(Radars{j}.hn,1);
             [gg,hh]=Radars{j}.G( ytruth{i,1}(k,:)', Radars{j}.PolarPositions, Radars{j}.hn, Radars{j}.ConeAngle,Radars{j}.MaxRange,Radars{j}.penalty);
             if isnan(hh)==0
-                Satobserve(i)=Satobserve(i)+1;
+                Satobserve(i,j)=Satobserve(i,j)+1;
 
             end
         end
     end
 end
-Satobserve
-
+sum(Satobserve,1)
+sum(Satobserve,2)
 
 % keyboard
 %% Generating measurements
@@ -219,14 +220,14 @@ for i=1:1:Constants.Nsat
     Satellites{i}.mu=zeros(Constants.Ntimesteps, Satellites{i}.fn) ;
     Satellites{i}.P=zeros(Constants.Ntimesteps, Satellites{i}.fn * Satellites{i}.fn );
     
-    Satellites{i}.Qmeas=0.0000001*blkdiag(0.01,0.01,0.01,1e-8,1e-8,1e-8);
+    Satellites{i}.Qmeas=0.000000001*blkdiag(0.01,0.01,0.01,1e-8,1e-8,1e-8);
     
     Satellites{i}.mu(1,:)=Xsat0(i,:);
     Satellites{i}.P(1,:)=reshape(P0,1, Satellites{i}.fn * Satellites{i}.fn);
 end
 
 %% Running Simmulation
-NextSensTaskTimeStep=20;
+NextSensTaskTimeStep=5;
 
 for k=2:1:Constants.Ntimesteps
     disp(strcat('at time step : ',num2str(k), ' : of : ',num2str(Constants.Ntimesteps)))
@@ -244,9 +245,7 @@ for k=2:1:Constants.Ntimesteps
         
 %         MeasPairs=SensorTask_GreedyTime_AllInd_prevconditoned(MeasPairs,Satellites,Radars,Constants,k,min([k+Constants.SensTaskHorizon,Constants.Ntimesteps]),'ut');
 %         MeasPairs=SensorTask_GreedySensor_exhaust_jointcov(MeasPairs,Satellites,Radars,Constants,k,min([k+Constants.SensTaskHorizon,Constants.Ntimesteps]),'ut');
-%         MeasPairs=SensorTask_GreedyTime_exhaust_jointcov(MeasPairs,Satellites,Radars,Constants,k,min([k+Constants.SensTaskHorizon,Constants.Ntimesteps]),'ut');
         MeasPairs=SensorTask_GreedyTarget_exhaust_jointcov(MeasPairs,Satellites,Radars,Constants,k,min([k+Constants.SensTaskHorizon,Constants.Ntimesteps]),'ut');
-        
         NextSensTaskTimeStep=min([k+Constants.SensTaskHorizon,Constants.Ntimesteps]);
         
     end
@@ -259,13 +258,14 @@ for k=2:1:Constants.Ntimesteps
     
     [CovMaxTrace,RMSEpos,CovFrob]=GetSatMetric(Satellites,Constants,ytruth,k);
     figure(2)
-    plot(Constants.Tvec(1:k),CovMaxTrace(:,3))
+    plot(Constants.Tvec(1:k),RMSEpos(:,3))
     
     pause(0.5)
 end
 
 
 
+%%
 
 [CovMaxTrace,RMSEpos,CovFrob]=GetSatMetric(Satellites,Constants,ytruth,Constants.Ntimesteps);
 %%
@@ -273,9 +273,9 @@ end
 figure
 plot(Constants.Tvec/3600,CovFrob(:,1),'r--',Constants.Tvec/3600,CovFrob(:,2),'k',Constants.Tvec/3600,CovFrob(:,3),'b--','lineWidth',2)
 legend('min','mean','max')
-xlabel('time (hr)')
+xlabel('time (hrs)')
 ylabel('Frobenious norm of Covariance ')
-plot_prop_paper33
+plot_prop_paper
 saveas(gcf,strcat(strrep(filename,'.mat',''),'_Frob'),'fig')
 saveas(gcf,strcat(strrep(filename,'.mat',''),'_Frob'),'epsc')
 saveas(gcf,strcat(strrep(filename,'.mat',''),'_Frob'),'png')
@@ -283,12 +283,14 @@ saveas(gcf,strcat(strrep(filename,'.mat',''),'_Frob'),'png')
 figure
 plot(Constants.Tvec/3600,RMSEpos(:,1),'r--',Constants.Tvec/3600,RMSEpos(:,2),'k',Constants.Tvec/3600,RMSEpos(:,3),'b--','lineWidth',2)
 legend('min','mean','max')
-xlabel('time (hr)')
-ylabel('Position error')
-plot_prop_paper33
+xlabel('time (hrs)')
+ylabel('Position error ')
+plot_prop_paper
 saveas(gcf,strcat(strrep(filename,'.mat',''),'_PosError'),'epsc')
 saveas(gcf,strcat(strrep(filename,'.mat',''),'_PosError'),'fig')
 saveas(gcf,strcat(strrep(filename,'.mat',''),'_PosError'),'png')
+
+
 %% Heat map of covariance
 
 
@@ -304,9 +306,7 @@ addXLabel(hm, 'time steps --> ', 'FontSize', 26, 'FontAngle', 'Italic')
 addYLabel(hm, 'Object Id ', 'FontSize', 26, 'FontAngle', 'Italic')
 addTitle(hm, 'Trace of Covariance ', 'FontSize', 26, 'FontAngle', 'Italic')
 plot_prop_paper33
-% saveas(gcf,strcat(strrep(filename,'.mat',''),'_CovHeat'),'fig')
 % saveas(gcf,strcat(strrep(filename,'.mat',''),'_CovHeat'),'epsc')
-% saveas(gcf,strcat(strrep(filename,'.mat',''),'_CovHeat'),'png')
 
 %% Heat map of tasking
 
@@ -335,7 +335,7 @@ for i=1:Constants.Nrad
     end
 end
 
-hm = HeatMap(M,'RowLabels',1:1:Constants.Nrad,'ColumnLabels',2:1:Constants.Ntimesteps,'Colormap','redbluecmap','Symmetric',0,'ColumnLabelsRotate',1);
+hm = HeatMap(M,'RowLabels',1:1:Constants.Nrad,'ColumnLabels',2:1:Constants.Ntimesteps,'Symmetric',0,'ColumnLabelsRotate',1);
 addXLabel(hm, 'time steps --> ', 'FontSize', 26, 'FontAngle', 'Italic')
 addYLabel(hm, 'Sensor Id ', 'FontSize', 26, 'FontAngle', 'Italic')
 addTitle(hm, 'Tasking Pairs ', 'FontSize', 26, 'FontAngle', 'Italic')
